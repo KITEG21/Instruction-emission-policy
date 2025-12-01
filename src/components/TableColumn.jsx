@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 
 // Componente para columnas de tabla estilo imagen
-function TableColumn({ title, subtitle, instructions, maxRows, showLatency, showDeps, showWaiting, highlight = [], color = 'blue', rowLabels, allInsts = [], commitPolicy, stallInIssue = false }) {
+function TableColumn({ title, subtitle, instructions, maxRows, showLatency, showDeps, showWaiting, highlight = [], color = 'blue', rowLabels, allInsts = [], commitPolicy, stallInIssue = false, highlightId = null, onHighlight }) {
   const rows = Array(maxRows).fill(null);
 
   const getHeaderColor = () => {
@@ -23,7 +23,8 @@ function TableColumn({ title, subtitle, instructions, maxRows, showLatency, show
       <div className="flex-1 p-2 space-y-2">
         {rows.map((_, idx) => {
           const inst = instructions[idx];
-          const isHighlighted = inst && highlight.some(h => h.id === inst.id);
+          const isHighlighted = inst && (highlight && highlight.some(h => h.id === inst.id));
+          const isExplicitHighlighted = inst && (highlightId && inst.id === highlightId);
           const isWaiting = inst && inst.stage === 'waiting';
 
           return (
@@ -38,13 +39,16 @@ function TableColumn({ title, subtitle, instructions, maxRows, showLatency, show
                 className={`relative rounded-lg p-2 min-h-[64px] flex-1 flex items-center justify-center border transition-colors ${inst
                   ? isWaiting
                     ? 'bg-orange-900/20 border-orange-500/30'
-                    : isHighlighted
-                      ? 'bg-green-900/20 border-green-500/30'
-                      : 'bg-zinc-800 border-zinc-700'
+                    : isExplicitHighlighted
+                      ? 'bg-yellow-900/20 border-yellow-400/40 ring-2 ring-yellow-400/20'
+                      : isHighlighted
+                        ? 'bg-green-900/20 border-green-500/30'
+                        : 'bg-zinc-800 border-zinc-700'
                   : 'bg-zinc-950/30 border-zinc-800/50 border-dashed'
                   }`}
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
+                onClick={() => inst && onHighlight && onHighlight(inst.id)}
               >
                 {inst ? (
                   <div className="text-center w-full">

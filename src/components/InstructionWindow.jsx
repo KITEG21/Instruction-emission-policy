@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function InstructionWindow({ showWindow, windowInsts }) {
+export default function InstructionWindow({ showWindow, windowInsts, highlightId, onHighlight }) {
   return (
     <AnimatePresence>
       {showWindow && (
@@ -16,7 +16,11 @@ export default function InstructionWindow({ showWindow, windowInsts }) {
           </h3>
           <div className="flex flex-wrap gap-2">
             {windowInsts.map(inst => (
-              <div key={inst.id} className="bg-zinc-800 text-zinc-300 px-3 py-2 rounded border border-zinc-700 font-mono text-sm">
+              <div
+                key={inst.id}
+                onClick={() => onHighlight && onHighlight(inst.id)}
+                className={`cursor-pointer ${inst.id === highlightId ? 'ring-2 ring-yellow-400 bg-yellow-500/10' : 'bg-zinc-800'} text-zinc-300 px-3 py-2 rounded border border-zinc-700 font-mono text-sm`}
+              >
                 {inst.id}
               </div>
             ))}

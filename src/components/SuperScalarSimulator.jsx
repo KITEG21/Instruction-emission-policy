@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ConfigurationPanel from './ConfigurationPanel';
 import ActionButtons from './ActionButtons';
 import QuickExplanation from './QuickExplanation';
+import KidWindow from './KidWindow';
 import StatusHeader from './StatusHeader';
 import PipelineVisualization from './PipelineVisualization';
 import InstructionWindow from './InstructionWindow';
@@ -37,6 +38,9 @@ export default function SuperscalarSimulator() {
   const [showEditor, setShowEditor] = useState(false);
   const [stallInIssue, setStallInIssue] = useState(false);
   const [showConfigPanel, setShowConfigPanel] = useState(true);
+  const [kidMode, setKidMode] = useState(false);
+  const [kidWindowVisible, setKidWindowVisible] = useState(false);
+  const [highlightedInstructionId, setHighlightedInstructionId] = useState(null);
   const intervalRef = useRef(null);
   // Debug toggle
   const DEBUG = true;
@@ -53,9 +57,9 @@ export default function SuperscalarSimulator() {
 
   // Instrucciones en tabla de decodificación (ya decodificadas, esperando ir a ejecución)
   const decodedQueue = instructions.filter(i =>
-  i.stage === 'decoded' &&
-  (policy !== 'out-out' || (i.stage === 'decoded' && !i.blockReason))
-);
+    i.stage === 'decoded' &&
+    (policy !== 'out-out' || (i.stage === 'decoded' && !i.blockReason))
+  );
 
   // Functional Units (ejecutando o esperando dependencias)
   const executingInsts = instructions.filter(i => i.stage === 'fu' || i.stage === 'waiting');
@@ -84,6 +88,7 @@ export default function SuperscalarSimulator() {
     setCycle(0);
     setInstructions(generateProgram());
     setStallInIssue(false);
+    setHighlightedInstructionId(null);
   };
 
   // Verificar si una instrucción puede ejecutarse (dependencias satisfechas)
@@ -152,7 +157,7 @@ export default function SuperscalarSimulator() {
               newInsts[idx] = { ...newInsts[idx], blockReason: 'FU ocupada' };
             }
             stallDetected = true;
-            if (DEBUG) console.log(`Cycle ${currentCycle}: Issue stall - ${inst.id} cannot be issued (FU ocupada)`);
+            if (DEBUG) console.log(`Ciclo ${currentCycle}: Stall de emisión - ${inst.id} no puede emitirse (FU ocupada)`);
           }
         }
       } else {
@@ -179,7 +184,7 @@ export default function SuperscalarSimulator() {
               newInsts[idx] = { ...newInsts[idx], blockReason: 'FU ocupada' };
             }
             stallDetected = true;
-            if (DEBUG) console.log(`Cycle ${currentCycle}: Issue stall - ${inst.id} cannot be issued (FU ocupada)`);
+            if (DEBUG) console.log(`Ciclo ${currentCycle}: Stall de emisión - ${inst.id} no puede emitirse (FU ocupada)`);
             break; // Stall por conflicto estructural
           }
         }
@@ -216,7 +221,7 @@ export default function SuperscalarSimulator() {
         // Nota: Se ejecuta en el mismo ciclo de emisión si acaba de llegar
         const remaining = inst.fuRemaining - 1;
         if (remaining <= 0) {
-          // Terminó ejecución, pasar a waiting para Write Back en el SIGUIENTE ciclo
+          // Terminó ejecución, pasar a waiting para escribir resultado (Write Back) en el SIGUIENTE ciclo
           newInsts[idx] = { ...inst, stage: 'waiting', fuRemaining: 0 };
         } else {
           newInsts[idx] = { ...inst, fuRemaining: remaining };
@@ -227,7 +232,7 @@ export default function SuperscalarSimulator() {
     return newInsts;
   };
 
-  // Fase 4: Commit (escribir resultados)
+  // Fase 4: Commit (escritura)
   const commit = (instList, currentCycle) => {
     const newInsts = [...instList];
     const waitingInsts = newInsts.filter(i => i.stage === 'waiting' && i.fuRemaining === 0)
@@ -369,6 +374,12 @@ export default function SuperscalarSimulator() {
     }
   }, [doneInsts.length, instructions.length]);
 
+  // Show kid window when kidMode is enabled
+  useEffect(() => {
+    if (kidMode) setKidWindowVisible(true);
+    else setKidWindowVisible(false);
+  }, [kidMode]);
+
   // Generar información dinámica del ciclo actual
   const getCurrentCycleInfo = () => {
     const decodingNow = instructions.filter(i => i.decodeAt === cycle).map(i => i.id);
@@ -394,7 +405,7 @@ export default function SuperscalarSimulator() {
         info.push(`Completando: ${completingNow.join(', ')}`);
       }
       if (readyToCommit.length > 0) {  // <-- Usa el nuevo nombre
-        info.push(`Listas para commit: ${readyToCommit.join(', ')}`);  // <-- Mensaje correcto
+        info.push(`Listas para escribir: ${readyToCommit.join(', ')}`);  // <-- Mensaje correcto
       }
       if (waitingDeps.length > 0) {
         info.push(`Esperando dependencias: ${waitingDeps.join(', ')}`);
@@ -411,6 +422,103 @@ export default function SuperscalarSimulator() {
     }
 
     return info;
+  };
+
+  // Friendly explanations for kids / simplified messages
+  const getKidFriendlyCycleInfo = () => {
+    const decodingNow = instructions.filter(i => i.decodeAt === cycle).map(i => i.id);
+    const issuingNow = instructions.filter(i => i.issueAt === cycle).map(i => i.id);
+    const completingNow = instructions.filter(i => i.completeAt === cycle).map(i => i.id);
+    const waitingDeps = instructions.filter(i => i.stage === 'waiting' && i.blockReason).map(i => i.id);
+    const readyToCommit = instructions.filter(i => i.stage === 'waiting' && !i.blockReason).map(i => i.id);
+    const busyUnits = executingInsts.filter(i => i.stage === 'fu').map(i => `${i.id} en ${UNITS.find(u => u.id === i.unitId)?.label || 'unidad'}`);
+
+    let info = [];
+    if (cycle === 0) {
+      info.push('Estoy listo para empezar.');
+    } else {
+      if (decodingNow.length > 0) info.push(`Decodificando: ${decodingNow.join(', ')}`);
+      if (issuingNow.length > 0) info.push(`Ejecutando: ${issuingNow.join(', ')}`); // más entendible para usuarios no técnicos
+      if (readyToCommit.length > 0) info.push(`Listo para guardar: ${readyToCommit.join(', ')}`);
+      if (completingNow.length > 0) info.push(`Ya guardé: ${completingNow.join(', ')}`);
+      if (waitingDeps.length > 0) info.push(`Esperando otra instrucción: ${waitingDeps.join(', ')}`);
+      if (busyUnits.length > 0) info.push(`Máquinas ocupadas: ${busyUnits.join(', ')}`);
+      if (info.length === 0) info.push('Nada nuevo en este ciclo.');
+    }
+    return info;
+  };
+
+  // Detalle técnico ligero para usuarios que quieren un nivel mas técnico
+  const getKidFriendlyDetails = () => {
+    const detailLines = [];
+    detailLines.push({ text: `Estado detallado — Ciclo ${cycle}`, instId: null });
+
+    const decodeIds = decodeQueue.map(i => i.id);
+    detailLines.push({ text: `Buffer de decodificación: ${decodeIds.length ? decodeIds.join(', ') : 'vacío'}`, instId: null });
+
+    const allDecoded = instructions.filter(i => i.stage === 'decoded');
+    const decodedReady = allDecoded.filter(i => !i.blockReason).map(i => i.id);
+    const decodedBlocked = allDecoded.filter(i => i.blockReason).map(i => ({ id: i.id, reason: i.blockReason }));
+
+    // Agregar entradas individuales de instrucciones listas (para poder resaltarlas)
+    if (decodedReady.length > 0) {
+      detailLines.push({ text: `Decodificadas (listas para emitir):`, instId: null });
+      decodedReady.forEach(id => detailLines.push({ text: `• ${id}`, instId: id }));
+    } else {
+      detailLines.push({ text: `Decodificadas (listas para emitir): ninguna`, instId: null });
+    }
+
+    if (decodedBlocked.length > 0) {
+      detailLines.push({ text: `Decodificadas (bloqueadas):`, instId: null });
+      decodedBlocked.forEach(obj => detailLines.push({ text: `• ${obj.id} (${obj.reason})`, instId: obj.id }));
+    } else {
+      detailLines.push({ text: `Decodificadas (bloqueadas): ninguna`, instId: null });
+    }
+
+    // Show per-unit status
+    UNITS.forEach(u => {
+      const inst = executingInsts.find(i => i.unitId === u.id);
+      if (inst) detailLines.push({ text: `${u.label}: ${inst.id} (restan ${inst.fuRemaining} ciclos)`, instId: inst.id });
+      else detailLines.push({ text: `${u.label}: libre`, instId: null });
+    });
+
+    const waitingToCommit = instructions.filter(i => i.stage === 'waiting' && i.fuRemaining === 0).map(i => i.id);
+    if (waitingToCommit.length) {
+      detailLines.push({ text: `Listas para escribir:`, instId: null });
+      waitingToCommit.forEach(id => detailLines.push({ text: `• ${id}`, instId: id }));
+    } else {
+      detailLines.push({ text: `Listas para escribir: ninguna`, instId: null });
+    }
+
+    // Determine blocked reasons and unmet deps
+    const blockedInsts = instructions.filter(i => i.blockReason);
+    blockedInsts.forEach(bi => {
+      const unmet = bi.deps.filter(depId => {
+        const dep = instructions.find(d => d.id === depId);
+        return !dep || dep.stage !== 'done';
+      });
+      if (unmet.length > 0) {
+        detailLines.push({ text: `${bi.id} espera: ${unmet.join(', ')}`, instId: bi.id });
+      } else {
+        detailLines.push({ text: `${bi.id} bloqueada por: ${bi.blockReason}`, instId: bi.id });
+      }
+    });
+
+    const stalls = blockedInsts.map(i => `${i.id} (${i.blockReason})`);
+    if (stalls.length) detailLines.push({ text: `Bloqueos: ${stalls.join(', ')}`, instId: null });
+
+    detailLines.push({ text: `Completadas: ${doneInsts.length} / ${instructions.length}`, instId: null });
+
+    // Sugerencia: instrucciones listas para emitir
+    const readyToIssue = allDecoded.filter(i => i.decodeAt < cycle && !i.blockReason && canExecute(i, instructions));
+    if (readyToIssue.length > 0) {
+      detailLines.push({ text: `Instrucciones listas para emitir si hay FU libres:`, instId: null });
+      readyToIssue.forEach(i => detailLines.push({ text: `• ${i.id}`, instId: i.id }));
+    } else {
+      detailLines.push({ text: `Instrucciones listas para emitir si hay FU libres: ninguna`, instId: null });
+    }
+
+    return detailLines;
   };
 
   return (
@@ -442,6 +550,8 @@ export default function SuperscalarSimulator() {
               setSpeed={setSpeed}
               cycle={cycle}
               getCurrentCycleInfo={getCurrentCycleInfo}
+              kidMode={kidMode}
+              setKidMode={setKidMode}
               issuePolicy={issuePolicy}
               commitPolicy={commitPolicy}
             />
@@ -457,7 +567,15 @@ export default function SuperscalarSimulator() {
             />
 
             {/* Explicación Rápida */}
-            <QuickExplanation />
+            <QuickExplanation currentInfo={getCurrentCycleInfo()} />
+            <KidWindow
+              show={kidWindowVisible}
+              lines={getKidFriendlyCycleInfo()}
+              details={getKidFriendlyDetails()}
+              onClose={() => setKidWindowVisible(false)}
+              onHighlight={(id) => setHighlightedInstructionId(id)}
+              onDisableKidMode={() => { setKidMode(false); setKidWindowVisible(false); setHighlightedInstructionId(null); }}
+            />
           </div>
 
           {/* Columna Derecha: Visualización */}
@@ -468,6 +586,8 @@ export default function SuperscalarSimulator() {
               cycle={cycle}
               doneInsts={doneInsts}
               instructions={instructions}
+              highlightId={highlightedInstructionId}
+              onClearHighlight={() => setHighlightedInstructionId(null)}
             />
 
             {/* Pipeline Visual */}
@@ -479,12 +599,16 @@ export default function SuperscalarSimulator() {
               instructions={instructions}
               commitPolicy={commitPolicy}
               stallInIssue={stallInIssue}
+              highlightId={highlightedInstructionId}
+              onHighlight={(id) => setHighlightedInstructionId(id)}
             />
 
             {/* Ventana de Instrucciones (Out-of-Order) */}
             <InstructionWindow
               showWindow={showWindow}
               windowInsts={windowInsts}
+              highlightId={highlightedInstructionId}
+              onHighlight={(id) => setHighlightedInstructionId(id)}
             />
 
             {/* Editor Modal */}

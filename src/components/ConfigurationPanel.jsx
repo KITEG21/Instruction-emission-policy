@@ -11,6 +11,8 @@ export default function ConfigurationPanel({
   setSpeed,
   cycle,
   getCurrentCycleInfo,
+  kidMode,
+  setKidMode,
   issuePolicy,
   commitPolicy
 }) {
@@ -98,6 +100,10 @@ export default function ConfigurationPanel({
                 onChange={(e) => setSpeed(parseInt(e.target.value))}
                 className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-yellow-500"
               />
+            </div>
+            <div className="mt-4 flex items-center justify-between">
+              <label className="text-zinc-300 text-sm">Modo sencillo</label>
+              <input type="checkbox" checked={kidMode} onChange={() => setKidMode(!kidMode)} className="h-4 w-4" />
             </div>
           </div>
         </>

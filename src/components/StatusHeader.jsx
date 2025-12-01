@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 
-export default function StatusHeader({ cycle, doneInsts, instructions }) {
+export default function StatusHeader({ cycle, doneInsts, instructions, highlightId, onClearHighlight }) {
   return (
     <div className="bg-zinc-900 rounded-xl border border-yellow-500/20 p-6 flex flex-wrap items-center justify-between gap-6">
       <div>
@@ -32,6 +32,12 @@ export default function StatusHeader({ cycle, doneInsts, instructions }) {
         >
           <span>🎉</span> Completado
         </motion.div>
+      )}
+      {highlightId && (
+        <div className="flex items-center gap-2">
+          <div className="text-zinc-300 text-sm font-mono px-3 py-1 bg-zinc-800 rounded">Resaltando: {highlightId}</div>
+          <button onClick={() => onClearHighlight && onClearHighlight()} className="text-xs text-zinc-400 hover:text-zinc-200 bg-zinc-800/30 px-2 py-1 rounded">Borrar</button>
+        </div>
       )}
     </div>
   );
