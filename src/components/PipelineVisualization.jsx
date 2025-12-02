@@ -10,7 +10,8 @@ export default function PipelineVisualization({
   commitPolicy,
   stallInIssue,
   highlightId,
-  onHighlight
+  onHighlight,
+  cycle
 }) {
   return (
     <div className="grid grid-cols-3 gap-4">
@@ -44,7 +45,7 @@ export default function PipelineVisualization({
       <TableColumn
         title="ESCRITURA"
         subtitle="Bus (2 posiciones)"
-        instructions={[...doneInsts].sort((a, b) => b.completeAt - a.completeAt)}
+        instructions={doneInsts.filter(i => i.completeAt === cycle)}
         maxRows={2}
         highlight={doneInsts}
         color="green"

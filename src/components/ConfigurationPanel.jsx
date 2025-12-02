@@ -108,19 +108,21 @@ export default function ConfigurationPanel({
           </div>
         </>
       ) : (
-        <div className="text-sm text-zinc-400 leading-relaxed">
-          <strong className="text-zinc-200 block mb-2">🔍 Ciclo Actual ({cycle}):</strong>
-          <div className="space-y-1">
-            {getCurrentCycleInfo().map((line, idx) => (
-              <p key={idx} className="text-xs">{line}</p>
-            ))}
+        !kidMode && (
+          <div className="text-sm text-zinc-400 leading-relaxed">
+            <strong className="text-zinc-200 block mb-2">🔍 Ciclo Actual ({cycle}):</strong>
+            <div className="space-y-1">
+              {getCurrentCycleInfo().map((line, idx) => (
+                <p key={idx} className="text-xs">{line}</p>
+              ))}
+            </div>
+            <div className="mt-3 pt-2 border-t border-zinc-700">
+              <p className="text-xs text-zinc-500">
+                <strong>Política:</strong> {issuePolicy === 'in-order' ? 'In-Order' : 'Out-of-Order'} Issue / {commitPolicy === 'in-order' ? 'In-Order' : 'Out-of-Order'} Commit
+              </p>
+            </div>
           </div>
-          <div className="mt-3 pt-2 border-t border-zinc-700">
-            <p className="text-xs text-zinc-500">
-              <strong>Política:</strong> {issuePolicy === 'in-order' ? 'In-Order' : 'Out-of-Order'} Issue / {commitPolicy === 'in-order' ? 'In-Order' : 'Out-of-Order'} Commit
-            </p>
-          </div>
-        </div>
+        )
       )}
     </div>
   );

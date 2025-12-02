@@ -9,6 +9,7 @@ import PipelineVisualization from './PipelineVisualization';
 import InstructionWindow from './InstructionWindow';
 import ProgramEditor from './ProgramEditor';
 import Timeline from './Timeline';
+import ConfigSummary from './ConfigSummary';
 
 // Generar programa de ejemplo similar a Figura 14.4
 const generateProgram = () => {
@@ -51,6 +52,8 @@ export default function SuperscalarSimulator() {
 
   // Ancho de emisión (Issue Width)
   const ISSUE_WIDTH = 2;
+  const DECODE_WIDTH = 2;
+  const COMMIT_WIDTH = 2;
 
   // Instrucciones en decodificación (no mostradas, en buffer)
   const decodeQueue = instructions.filter(i => i.stage === 'decode');
@@ -567,15 +570,8 @@ export default function SuperscalarSimulator() {
             />
 
             {/* Explicación Rápida */}
-            <QuickExplanation currentInfo={getCurrentCycleInfo()} />
-            <KidWindow
-              show={kidWindowVisible}
-              lines={getKidFriendlyCycleInfo()}
-              details={getKidFriendlyDetails()}
-              onClose={() => setKidWindowVisible(false)}
-              onHighlight={(id) => setHighlightedInstructionId(id)}
-              onDisableKidMode={() => { setKidMode(false); setKidWindowVisible(false); setHighlightedInstructionId(null); }}
-            />
+
+            <ConfigSummary config={{ instructions }} />
           </div>
 
           {/* Columna Derecha: Visualización */}
@@ -601,6 +597,7 @@ export default function SuperscalarSimulator() {
               stallInIssue={stallInIssue}
               highlightId={highlightedInstructionId}
               onHighlight={(id) => setHighlightedInstructionId(id)}
+              cycle={cycle}
             />
 
             {/* Ventana de Instrucciones (Out-of-Order) */}
@@ -629,6 +626,16 @@ export default function SuperscalarSimulator() {
 
           </div>
         </div>
+
+        {/* Kid Mode Window */}
+        <KidWindow
+          show={kidWindowVisible}
+          lines={getKidFriendlyCycleInfo()}
+          details={getKidFriendlyDetails()}
+          onClose={() => setKidWindowVisible(false)}
+          onHighlight={setHighlightedInstructionId}
+          onDisableKidMode={() => setKidMode(false)}
+        />
       </div>
     </div>
   );
