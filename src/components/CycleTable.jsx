@@ -2,17 +2,35 @@
 function CycleTable({ instructions, currentCycle }) {
   const allInsts = [...instructions].sort((a, b) => a.order - b.order);
   const maxCycles = Math.max(currentCycle + 1, 12);
+  const cycles = Array.from({ length: maxCycles }, (_, i) => i + 1); // Start at cycle 1
 
   // Determinar qué pasó con cada instrucción en cada ciclo
   const getStageAtCycle = (inst, cycle) => {
-    if (inst.decodeAt && cycle === inst.decodeAt) return { label: 'D', color: 'text-blue-400 bg-blue-900/20 border-blue-500/30' };
-
-    if (inst.issueAt && cycle >= inst.issueAt) {
-      const cyclesInExec = cycle - inst.issueAt;
-      if (cyclesInExec < inst.latency) return { label: 'E', color: 'text-yellow-400 bg-yellow-900/20 border-yellow-500/30' };
-      if (inst.completeAt && cycle === inst.completeAt) return { label: 'W', color: 'text-green-400 bg-green-900/20 border-green-500/30' };
-      if (cyclesInExec >= inst.latency && inst.stage !== 'done') return { label: '—', color: 'text-orange-400 bg-orange-900/20 border-orange-500/30' }; // Stall
+    // No mostrar nada para ciclos futuros (después del ciclo actual)
+    if (cycle > currentCycle) {
+      return null;
     }
+
+    // W: Write/Commit stage (check first - happens at specific cycle)
+    if (inst.completeAt && cycle === inst.completeAt) {
+      return { label: 'S', color: 'text-green-400 bg-green-900/20 border-green-500/30' };
+    }
+
+    // X: Limbo state (instruction finished execution but cannot write) - stays until write
+    if (inst.limboAt && cycle >= inst.limboAt && cycle < (inst.completeAt || Infinity)) {
+      return { label: 'X', color: 'text-orange-400 bg-orange-900/20 border-orange-500/30' };
+    }
+
+    // E: Execution stage
+    if (inst.issueAt && cycle >= inst.issueAt && cycle < inst.issueAt + inst.latency) {
+      return { label: 'E', color: 'text-yellow-400 bg-yellow-900/20 border-yellow-500/30' };
+    }
+
+    // D: Decode stage - persists from decodeAt until issueAt (re-decoding while blocked)
+    if (inst.decodeAt && cycle >= inst.decodeAt && cycle < (inst.issueAt || Infinity)) {
+      return { label: 'D', color: 'text-blue-400 bg-blue-900/20 border-blue-500/30' };
+    }
+
     return null;
   };
 
@@ -23,7 +41,7 @@ function CycleTable({ instructions, currentCycle }) {
           <tr>
             <th className="p-2 text-left text-zinc-500 font-mono text-xs border-b border-zinc-800 sticky left-0 bg-zinc-900 z-10">INST</th>
             <th className="p-2 text-center text-zinc-500 font-mono text-xs border-b border-zinc-800">LAT</th>
-            {Array.from({ length: maxCycles }, (_, i) => (
+            {cycles.map(i => (
               <th
                 key={i}
                 className={`p-2 text-center font-mono text-xs border-b border-zinc-800 min-w-[30px] ${i === currentCycle ? 'text-yellow-400 bg-yellow-500/10' : 'text-zinc-600'
@@ -43,7 +61,7 @@ function CycleTable({ instructions, currentCycle }) {
               <td className="p-2 text-center font-mono text-zinc-500 text-xs border-b border-zinc-800/50 border-r border-zinc-800">
                 {inst.latency}
               </td>
-              {Array.from({ length: maxCycles }, (_, i) => {
+              {cycles.map(i => {
                 const stage = getStageAtCycle(inst, i);
                 return (
                   <td

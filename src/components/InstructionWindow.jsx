@@ -19,9 +19,12 @@ export default function InstructionWindow({ showWindow, windowInsts, highlightId
               <div
                 key={inst.id}
                 onClick={() => onHighlight && onHighlight(inst.id)}
-                className={`cursor-pointer ${inst.id === highlightId ? 'ring-2 ring-yellow-400 bg-yellow-500/10' : 'bg-zinc-800'} text-zinc-300 px-3 py-2 rounded border border-zinc-700 font-mono text-sm`}
+                className={`cursor-pointer ${inst.id === highlightId ? 'ring-2 ring-yellow-400 bg-yellow-500/10' : 'bg-zinc-800'} text-zinc-300 px-3 py-2 rounded border border-zinc-700 font-mono text-sm flex items-center gap-2`}
               >
-                {inst.id}
+                <span>{inst.id}</span>
+                {inst.stage === 'limbo' && (
+                    <span className="text-[10px] text-orange-400 bg-orange-900/10 px-2 py-0.5 rounded uppercase font-bold">X</span>
+                )}
               </div>
             ))}
           </div>

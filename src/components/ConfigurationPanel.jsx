@@ -14,7 +14,9 @@ export default function ConfigurationPanel({
   kidMode,
   setKidMode,
   issuePolicy,
-  commitPolicy
+  commitPolicy,
+  showLimboWindow,
+  setShowLimboWindow
 }) {
   return (
     <div className="bg-zinc-900 rounded-xl border border-yellow-500/20 p-6 shadow-lg">
@@ -104,6 +106,10 @@ export default function ConfigurationPanel({
             <div className="mt-4 flex items-center justify-between">
               <label className="text-zinc-300 text-sm">Modo sencillo</label>
               <input type="checkbox" checked={kidMode} onChange={() => setKidMode(!kidMode)} className="h-4 w-4" />
+            </div>
+            <div className="mt-2 flex items-center justify-between">
+              <label className="text-zinc-300 text-sm">Mostrar Limbo</label>
+              <input type="checkbox" checked={showLimboWindow} onChange={() => setShowLimboWindow(!showLimboWindow)} className="h-4 w-4" />
             </div>
           </div>
         </>

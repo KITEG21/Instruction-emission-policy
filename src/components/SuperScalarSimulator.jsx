@@ -10,16 +10,17 @@ import InstructionWindow from './InstructionWindow';
 import ProgramEditor from './ProgramEditor';
 import Timeline from './Timeline';
 import ConfigSummary from './ConfigSummary';
+import LimboWindow from './LimboWindow';
 
 // Generar programa de ejemplo similar a Figura 14.4
 const generateProgram = () => {
   return [
-    { id: 'I1', type: 'FPU', deps: [], latency: 2, stage: 'decode', fuRemaining: 0, order: 0, issueAt: null, completeAt: null, decodeAt: null, blockReason: null },
-    { id: 'I2', type: 'ALU', deps: [], latency: 1, stage: 'decode', fuRemaining: 0, order: 1, issueAt: null, completeAt: null, decodeAt: null, blockReason: null },
-    { id: 'I3', type: 'ALU', deps: [], latency: 1, stage: 'decode', fuRemaining: 0, order: 2, issueAt: null, completeAt: null, decodeAt: null, blockReason: null },
-    { id: 'I4', type: 'ALU', deps: [], latency: 1, stage: 'decode', fuRemaining: 0, order: 3, issueAt: null, completeAt: null, decodeAt: null, blockReason: null },
-    { id: 'I5', type: 'MEM', deps: ['I4'], latency: 1, stage: 'decode', fuRemaining: 0, order: 4, issueAt: null, completeAt: null, decodeAt: null, blockReason: null },
-    { id: 'I6', type: 'MEM', deps: [], latency: 1, stage: 'decode', fuRemaining: 0, order: 5, issueAt: null, completeAt: null, decodeAt: null, blockReason: null },
+    { id: 'I1', type: 'FPU', deps: [], latency: 2, stage: 'decode', fuRemaining: 0, order: 0, issueAt: null, completeAt: null, decodeAt: null, blockReason: null, executedUnitId: undefined },
+    { id: 'I2', type: 'ALU', deps: [], latency: 1, stage: 'decode', fuRemaining: 0, order: 1, issueAt: null, completeAt: null, decodeAt: null, blockReason: null, executedUnitId: undefined },
+    { id: 'I3', type: 'ALU', deps: [], latency: 1, stage: 'decode', fuRemaining: 0, order: 2, issueAt: null, completeAt: null, decodeAt: null, blockReason: null, executedUnitId: undefined },
+    { id: 'I4', type: 'ALU', deps: [], latency: 1, stage: 'decode', fuRemaining: 0, order: 3, issueAt: null, completeAt: null, decodeAt: null, blockReason: null, executedUnitId: undefined },
+    { id: 'I5', type: 'MEM', deps: ['I4'], latency: 1, stage: 'decode', fuRemaining: 0, order: 4, issueAt: null, completeAt: null, decodeAt: null, blockReason: null, executedUnitId: undefined },
+    { id: 'I6', type: 'MEM', deps: [], latency: 1, stage: 'decode', fuRemaining: 0, order: 5, issueAt: null, completeAt: null, decodeAt: null, blockReason: null, executedUnitId: undefined },
   ];
 };
 
@@ -41,6 +42,7 @@ export default function SuperscalarSimulator() {
   const [showConfigPanel, setShowConfigPanel] = useState(true);
   const [kidMode, setKidMode] = useState(false);
   const [kidWindowVisible, setKidWindowVisible] = useState(false);
+  const [showLimboWindow, setShowLimboWindow] = useState(true);
   const [highlightedInstructionId, setHighlightedInstructionId] = useState(null);
   const intervalRef = useRef(null);
   // Debug toggle
@@ -65,7 +67,7 @@ export default function SuperscalarSimulator() {
   );
 
   // Functional Units (ejecutando o esperando dependencias)
-  const executingInsts = instructions.filter(i => i.stage === 'fu' || i.stage === 'waiting');
+  const executingInsts = instructions.filter(i => i.stage === 'fu');
 
   // Instrucciones completadas (escritura)
   const doneInsts = instructions.filter(i => i.stage === 'done');
@@ -78,7 +80,7 @@ export default function SuperscalarSimulator() {
   const windowInstIds = [
     ...instructions.filter(i => i.stage === 'decoded' && i.decodeAt !== null && i.decodeAt < cycle).map(i => i.id),
     ...instructions.filter(i => i.stage === 'fu' && i.issueAt === cycle).map(i => i.id),
-    ...instructions.filter(i => i.stage === 'waiting' && i.issueAt === cycle).map(i => i.id),
+    ...instructions.filter(i => (i.stage === 'waiting' || i.stage === 'limbo') && i.issueAt === cycle).map(i => i.id),
   ];
 
   // Lista de instrucciones para mostrar en la ventana
@@ -103,6 +105,26 @@ export default function SuperscalarSimulator() {
     });
   };
 
+  // Helper: compute per-instruction stage label for any cycle (consistent with timeline)
+  const getStageLabelForCycle = (inst, cycleToCheck) => {
+    // don't show future cycles
+    if (cycleToCheck > cycle) return null;
+
+    // W: write/commit at exact cycle
+    if (inst.completeAt && cycleToCheck === inst.completeAt) return 'W';
+
+    // X: limbo: from limboAt until just before completeAt
+    if (inst.limboAt && cycleToCheck >= inst.limboAt && cycleToCheck < (inst.completeAt || Infinity)) return 'X';
+
+    // E: executing (issueAt .. issueAt+latency-1)
+    if (inst.issueAt && cycleToCheck >= inst.issueAt && cycleToCheck < inst.issueAt + inst.latency) return 'E';
+
+    // D: decoded: from decodeAt until it issues
+    if (inst.decodeAt && cycleToCheck >= inst.decodeAt && cycleToCheck < (inst.issueAt || Infinity)) return 'D';
+
+    return null;
+  };
+
   // Fase 1: Decodificar (máximo 2 instrucciones por ciclo)
   const decode = (instList, currentCycle) => {
     const newInsts = [...instList];
@@ -123,7 +145,7 @@ export default function SuperscalarSimulator() {
   const issue = (instList, currentCycle) => {
     const newInsts = [...instList];
     const decodedInsts = newInsts.filter(i => i.stage === 'decoded').sort((a, b) => a.order - b.order);
-    const executing = newInsts.filter(i => i.stage === 'fu' || i.stage === 'waiting');
+    const executing = newInsts.filter(i => i.stage === 'fu');
 
     // Identificar unidades ocupadas
     const occupiedUnitIds = executing.map(i => i.unitId).filter(id => id !== undefined);
@@ -204,7 +226,8 @@ export default function SuperscalarSimulator() {
             fuRemaining: inst.latency,
             issueAt: currentCycle,
             unitId: inst.unitId,
-            blockReason: null // Limpiar razón al emitir
+            blockReason: null, // Limpiar razón al emitir
+            executedUnitId: undefined // clear any previous executed unit mapping
           };
         }
       });
@@ -225,7 +248,8 @@ export default function SuperscalarSimulator() {
         const remaining = inst.fuRemaining - 1;
         if (remaining <= 0) {
           // Terminó ejecución, pasar a waiting para escribir resultado (Write Back) en el SIGUIENTE ciclo
-          newInsts[idx] = { ...inst, stage: 'waiting', fuRemaining: 0 };
+          // Guardar la unidad que ejecutó la instrucción para representación en el pipeline
+          newInsts[idx] = { ...inst, stage: 'waiting', fuRemaining: 0, executedUnitId: inst.unitId, unitId: undefined, waitingAt: currentCycle };
         } else {
           newInsts[idx] = { ...inst, fuRemaining: remaining };
         }
@@ -238,54 +262,71 @@ export default function SuperscalarSimulator() {
   // Fase 4: Commit (escritura)
   const commit = (instList, currentCycle) => {
     const newInsts = [...instList];
-    const waitingInsts = newInsts.filter(i => i.stage === 'waiting' && i.fuRemaining === 0)
+    const waitingInsts = newInsts.filter(i => (i.stage === 'waiting' || i.stage === 'limbo') && i.fuRemaining === 0)
       .sort((a, b) => a.order - b.order);
 
-    // Clear any previous blockReason by default (we will set if still blocked)
+    // Clear any previous blockReason & commitAttempt by default (we will set if still blocked)
     for (const wi of waitingInsts) {
       const idx = newInsts.findIndex(i => i.id === wi.id);
       if (idx !== -1) newInsts[idx] = { ...newInsts[idx], blockReason: null };
     }
+    // Reset previous commit attempt counters
+    for (const ni of newInsts) {
+      const idx = newInsts.findIndex(i => i.id === ni.id);
+      if (idx !== -1) newInsts[idx] = { ...newInsts[idx], commitAttemptAt: undefined };
+    }
 
     if (waitingInsts.length > 0) {
       let toCommit = [];
+      const MAX_COMMIT = COMMIT_WIDTH;
 
       if (commitPolicy === 'in-order') {
         // En orden: solo escribir si no hay anteriores pendientes
         for (let inst of waitingInsts) {
+          // record attempt
+          const attemptIdx = newInsts.findIndex(i => i.id === inst.id);
+          if (attemptIdx !== -1) newInsts[attemptIdx] = { ...newInsts[attemptIdx], commitAttemptAt: currentCycle };
           const hasEarlierNotDone = newInsts.some(i =>
             i.order < inst.order &&
             i.stage !== 'done' &&
             !toCommit.find(c => c.id === i.id)
           );
 
-          if (!hasEarlierNotDone && toCommit.length < 2) {
+          if (!hasEarlierNotDone && toCommit.length < MAX_COMMIT) {
             toCommit.push(inst);
           } else if (hasEarlierNotDone) {
             // marca razón: bloqueada por instrucción anterior
             const idx = newInsts.findIndex(i => i.id === inst.id);
             if (idx !== -1) {
               const earlier = newInsts.find(i => i.order < inst.order && i.stage !== 'done' && !toCommit.find(c => c.id === i.id));
-              newInsts[idx] = { ...newInsts[idx], blockReason: earlier ? `Bloqueada por ${earlier.id}` : 'Orden' };
+              newInsts[idx] = { ...newInsts[idx], blockReason: earlier ? `Bloqueada por ${earlier.id}` : 'Orden', stage: 'limbo', limboAt: currentCycle };
             }
             break; // ordenar obliga a parar
-          } else if (toCommit.length >= 2) {
+          } else if (toCommit.length >= MAX_COMMIT) {
             // marca razón: bus de escritura lleno
             const idx = newInsts.findIndex(i => i.id === inst.id);
             if (idx !== -1) {
-              newInsts[idx] = { ...newInsts[idx], blockReason: 'Bus escritura lleno' };
+              newInsts[idx] = { ...newInsts[idx], blockReason: 'Bus escritura lleno', stage: 'limbo', limboAt: currentCycle };
             }
           }
         }
       } else {
-        // Fuera de orden: escribir hasta 2 instrucciones
-        toCommit = waitingInsts.slice(0, 2);
+        // Fuera de orden: escribir hasta MAX_COMMIT instrucciones
+        toCommit = waitingInsts.slice(0, MAX_COMMIT);
+        // Mark others blocked by writebus full
+        for (const inst of waitingInsts.slice(MAX_COMMIT)) {
+          const idx = newInsts.findIndex(i => i.id === inst.id);
+          if (idx !== -1) {
+            newInsts[idx] = { ...newInsts[idx], blockReason: 'Bus escritura lleno', stage: 'limbo', limboAt: currentCycle };
+          }
+        }
       }
 
       toCommit.forEach(inst => {
         const idx = newInsts.findIndex(i => i.id === inst.id);
         if (idx !== -1) {
-          newInsts[idx] = { ...newInsts[idx], stage: 'done', completeAt: currentCycle, blockReason: null };
+          // Keep limboAt for timeline history, clear only active blockReason
+          newInsts[idx] = { ...newInsts[idx], stage: 'done', completeAt: currentCycle, blockReason: null, unitId: undefined, waitingAt: undefined, executedUnitId: newInsts[idx].executedUnitId };
         }
       });
     }
@@ -383,13 +424,24 @@ export default function SuperscalarSimulator() {
     else setKidWindowVisible(false);
   }, [kidMode]);
 
+  // Compute and annotate limbo cycles for display
+  const limboAnnotated = instructions.map(inst => {
+    if (inst.stage === 'limbo') {
+      const limboStart = inst.limboAt ?? inst.waitingAt ?? 0;
+      const limboCycles = limboStart ? (cycle - limboStart + 1) : 0;
+      return { ...inst, limboCycles };
+    }
+    return inst;
+  });
+
   // Generar información dinámica del ciclo actual
   const getCurrentCycleInfo = () => {
-    const decodingNow = instructions.filter(i => i.decodeAt === cycle).map(i => i.id);
-    const issuingNow = instructions.filter(i => i.issueAt === cycle).map(i => i.id);
-    const completingNow = instructions.filter(i => i.completeAt === cycle).map(i => i.id);
-    const readyToCommit = instructions.filter(i => i.stage === 'waiting' && !i.blockReason).map(i => i.id);  // <-- Cambia nombre
-    const waitingDeps = instructions.filter(i => i.stage === 'waiting' && i.blockReason).map(i => i.id);
+    const decodingNow = instructions.filter(i => getStageLabelForCycle(i, cycle) === 'D').map(i => i.id);
+    const issuingNow = instructions.filter(i => getStageLabelForCycle(i, cycle) === 'E').map(i => i.id);
+    const completingNow = instructions.filter(i => getStageLabelForCycle(i, cycle) === 'W').map(i => i.id);
+    // Ready to commit: waiting/limbo without a block reason, but exclude those completing this cycle
+    const readyToCommit = instructions.filter(i => (i.stage === 'waiting' || i.stage === 'limbo') && !i.blockReason && !(i.completeAt === cycle)).map(i => i.id);
+    const waitingDeps = instructions.filter(i => (i.stage === 'waiting' || i.stage === 'limbo') && i.blockReason).map(i => i.id);
     const stalledInsts = instructions.filter(i => i.blockReason).map(i => i.id + ` (${i.blockReason})`);
     const busyUnits = executingInsts.filter(i => i.stage === 'fu').map(i => `${i.id} en ${UNITS.find(u => u.id === i.unitId)?.label || 'unidad'}`);
 
@@ -429,11 +481,11 @@ export default function SuperscalarSimulator() {
 
   // Friendly explanations for kids / simplified messages
   const getKidFriendlyCycleInfo = () => {
-    const decodingNow = instructions.filter(i => i.decodeAt === cycle).map(i => i.id);
-    const issuingNow = instructions.filter(i => i.issueAt === cycle).map(i => i.id);
-    const completingNow = instructions.filter(i => i.completeAt === cycle).map(i => i.id);
-    const waitingDeps = instructions.filter(i => i.stage === 'waiting' && i.blockReason).map(i => i.id);
-    const readyToCommit = instructions.filter(i => i.stage === 'waiting' && !i.blockReason).map(i => i.id);
+    const decodingNow = instructions.filter(i => getStageLabelForCycle(i, cycle) === 'D').map(i => i.id);
+    const issuingNow = instructions.filter(i => getStageLabelForCycle(i, cycle) === 'E').map(i => i.id);
+    const completingNow = instructions.filter(i => getStageLabelForCycle(i, cycle) === 'W').map(i => i.id);
+    const waitingDeps = instructions.filter(i => (i.stage === 'waiting' || i.stage === 'limbo') && i.blockReason).map(i => i.id);
+    const readyToCommit = instructions.filter(i => (i.stage === 'waiting' || i.stage === 'limbo') && !i.blockReason && !(i.completeAt === cycle)).map(i => i.id);
     const busyUnits = executingInsts.filter(i => i.stage === 'fu').map(i => `${i.id} en ${UNITS.find(u => u.id === i.unitId)?.label || 'unidad'}`);
 
     let info = [];
@@ -485,7 +537,7 @@ export default function SuperscalarSimulator() {
       else detailLines.push({ text: `${u.label}: libre`, instId: null });
     });
 
-    const waitingToCommit = instructions.filter(i => i.stage === 'waiting' && i.fuRemaining === 0).map(i => i.id);
+    const waitingToCommit = instructions.filter(i => (i.stage === 'waiting' || i.stage === 'limbo') && i.fuRemaining === 0).map(i => i.id);
     if (waitingToCommit.length) {
       detailLines.push({ text: `Listas para escribir:`, instId: null });
       waitingToCommit.forEach(id => detailLines.push({ text: `• ${id}`, instId: id }));
@@ -509,6 +561,12 @@ export default function SuperscalarSimulator() {
 
     const stalls = blockedInsts.map(i => `${i.id} (${i.blockReason})`);
     if (stalls.length) detailLines.push({ text: `Bloqueos: ${stalls.join(', ')}`, instId: null });
+
+    // Show limbo instructions explicitly
+    const limboInsts = instructions.filter(i => i.stage === 'limbo').map(i => i.id);
+    if (limboInsts.length > 0) {
+      detailLines.push({ text: `En limbo: ${limboInsts.join(', ')}`, instId: null });
+    }
 
     detailLines.push({ text: `Completadas: ${doneInsts.length} / ${instructions.length}`, instId: null });
 
@@ -555,6 +613,8 @@ export default function SuperscalarSimulator() {
               getCurrentCycleInfo={getCurrentCycleInfo}
               kidMode={kidMode}
               setKidMode={setKidMode}
+              showLimboWindow={showLimboWindow}
+              setShowLimboWindow={setShowLimboWindow}
               issuePolicy={issuePolicy}
               commitPolicy={commitPolicy}
             />
@@ -572,6 +632,9 @@ export default function SuperscalarSimulator() {
             {/* Explicación Rápida */}
 
             <ConfigSummary config={{ instructions }} />
+            {showLimboWindow && (
+              <LimboWindow limboInsts={limboAnnotated.filter(i => i.stage === 'limbo')} cycle={cycle} onHighlight={setHighlightedInstructionId} />
+            )}
           </div>
 
           {/* Columna Derecha: Visualización */}
@@ -584,6 +647,8 @@ export default function SuperscalarSimulator() {
               instructions={instructions}
               highlightId={highlightedInstructionId}
               onClearHighlight={() => setHighlightedInstructionId(null)}
+              showLimboWindow={showLimboWindow}
+              setShowLimboWindow={setShowLimboWindow}
             />
 
             {/* Pipeline Visual */}

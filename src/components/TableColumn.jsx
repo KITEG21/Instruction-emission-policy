@@ -26,6 +26,7 @@ function TableColumn({ title, subtitle, instructions, maxRows, showLatency, show
           const isHighlighted = inst && (highlight && highlight.some(h => h.id === inst.id));
           const isExplicitHighlighted = inst && (highlightId && inst.id === highlightId);
           const isWaiting = inst && inst.stage === 'waiting';
+          const isLimbo = inst && inst.stage === 'limbo';
 
           return (
             <div key={idx} className="flex items-center gap-2 w-full">
@@ -37,13 +38,15 @@ function TableColumn({ title, subtitle, instructions, maxRows, showLatency, show
               <motion.div
                 key={inst ? inst.id : `empty-${idx}`}
                 className={`relative rounded-lg p-2 min-h-[64px] flex-1 flex items-center justify-center border transition-colors ${inst
-                  ? isWaiting
-                    ? 'bg-orange-900/20 border-orange-500/30'
-                    : isExplicitHighlighted
-                      ? 'bg-yellow-900/20 border-yellow-400/40 ring-2 ring-yellow-400/20'
-                      : isHighlighted
-                        ? 'bg-green-900/20 border-green-500/30'
-                        : 'bg-zinc-800 border-zinc-700'
+                  ? isLimbo
+                    ? 'bg-orange-900/10 border-orange-500/20'
+                    : isWaiting
+                      ? 'bg-orange-900/20 border-orange-500/30'
+                      : isExplicitHighlighted
+                        ? 'bg-yellow-900/20 border-yellow-400/40 ring-2 ring-yellow-400/20'
+                        : isHighlighted
+                          ? 'bg-green-900/20 border-green-500/30'
+                          : 'bg-zinc-800 border-zinc-700'
                   : 'bg-zinc-950/30 border-zinc-800/50 border-dashed'
                   }`}
                 initial={{ opacity: 0, scale: 0.9 }}
@@ -52,7 +55,7 @@ function TableColumn({ title, subtitle, instructions, maxRows, showLatency, show
               >
                 {inst ? (
                   <div className="text-center w-full">
-                    <span className={`font-mono font-bold text-lg ${isWaiting ? 'text-orange-400' : 'text-white'}`}>
+                    <span className={`font-mono font-bold text-lg ${isLimbo ? 'text-orange-300 italic' : isWaiting ? 'text-orange-400' : 'text-white'}`}>
                       {inst.id}
                     </span>
 
@@ -67,9 +70,9 @@ function TableColumn({ title, subtitle, instructions, maxRows, showLatency, show
                     )}
 
                     {/* Estado Waiting */}
-                    {showWaiting && inst.stage === 'waiting' && (
+                    {showWaiting && (inst.stage === 'waiting' || inst.stage === 'limbo') && (
                       <div className="text-[10px] text-orange-400 mt-1 font-bold uppercase tracking-tighter">
-                        {inst.fuRemaining > 0 ? 'Deps Pendientes' : 'Esperando Escritura'}
+                        {inst.stage === 'limbo' ? 'En Limbo' : inst.fuRemaining > 0 ? 'Deps Pendientes' : 'Esperando Escritura'}
                       </div>
                     )}
 

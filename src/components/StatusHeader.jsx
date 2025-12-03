@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 
-export default function StatusHeader({ cycle, doneInsts, instructions, highlightId, onClearHighlight }) {
+export default function StatusHeader({ cycle, doneInsts, instructions, highlightId, onClearHighlight, showLimboWindow, setShowLimboWindow }) {
   return (
     <div className="bg-zinc-900 rounded-xl border border-yellow-500/20 p-6 flex flex-wrap items-center justify-between gap-6">
       <div>
@@ -39,6 +39,16 @@ export default function StatusHeader({ cycle, doneInsts, instructions, highlight
           <button onClick={() => onClearHighlight && onClearHighlight()} className="text-xs text-zinc-400 hover:text-zinc-200 bg-zinc-800/30 px-2 py-1 rounded">Borrar</button>
         </div>
       )}
+      <div className="flex items-center gap-2">
+        <label className="text-xs text-zinc-400 mr-2">Limbo</label>
+        <button
+          onClick={() => setShowLimboWindow && setShowLimboWindow(!showLimboWindow)}
+          className={`px-3 py-1 rounded text-xs ${showLimboWindow ? 'bg-yellow-500 text-black' : 'bg-zinc-800 text-zinc-300'}`}
+          title={showLimboWindow ? 'Ocultar ventana Limbo' : 'Mostrar ventana Limbo'}
+        >
+          {showLimboWindow ? 'ON' : 'OFF'}
+        </button>
+      </div>
     </div>
   );
 }
